@@ -52,3 +52,6 @@ docker/.pgpass
 output.log
 
 .pgpass
+
+# Ignore .idea files
+.idea
