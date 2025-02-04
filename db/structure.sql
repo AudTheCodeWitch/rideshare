@@ -231,6 +231,7 @@ CREATE TABLE rideshare.users (
     trips_count integer,
     drivers_license_number character varying(100)
 );
+ALTER TABLE ONLY rideshare.users ALTER COLUMN first_name SET STATISTICS 5000;
 
 
 --
@@ -238,6 +239,41 @@ CREATE TABLE rideshare.users (
 --
 
 COMMENT ON TABLE rideshare.users IS 'sensitive_fields|first_name:scrub_text,last_name:scrub_text,email:scrub_email';
+
+
+--
+-- Name: COLUMN users.first_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.first_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.last_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.last_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.email; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.email IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.password_digest; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.password_digest IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.drivers_license_number; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.drivers_license_number IS 'sensitive_data=true';
 
 
 --
@@ -776,6 +812,7 @@ ALTER TABLE ONLY rideshare.trip_requests
 SET search_path TO rideshare;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20250204184725'),
 ('20231220043547'),
 ('20231218215836'),
 ('20231213045957'),
