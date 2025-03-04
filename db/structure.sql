@@ -17,6 +17,8 @@ ALTER TABLE IF EXISTS ONLY rideshare.vehicle_reservations DROP CONSTRAINT IF EXI
 ALTER TABLE IF EXISTS ONLY rideshare.trips DROP CONSTRAINT IF EXISTS fk_rails_6d92acb430;
 ALTER TABLE IF EXISTS ONLY rideshare.vehicle_reservations DROP CONSTRAINT IF EXISTS fk_rails_59996232fc;
 ALTER TABLE IF EXISTS ONLY rideshare.trip_requests DROP CONSTRAINT IF EXISTS fk_rails_3fdebbfaca;
+DROP INDEX IF EXISTS rideshare.users_copy_last_name_idx;
+DROP INDEX IF EXISTS rideshare.users_copy_email_idx;
 DROP INDEX IF EXISTS rideshare.index_vehicles_on_name;
 DROP INDEX IF EXISTS rideshare.index_vehicle_reservations_on_vehicle_id;
 DROP INDEX IF EXISTS rideshare.index_users_on_last_name;
@@ -32,6 +34,7 @@ DROP INDEX IF EXISTS rideshare.index_fast_search_results_on_driver_id;
 ALTER TABLE IF EXISTS ONLY rideshare.vehicles DROP CONSTRAINT IF EXISTS vehicles_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.vehicle_reservations DROP CONSTRAINT IF EXISTS vehicle_reservations_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.users DROP CONSTRAINT IF EXISTS users_pkey;
+ALTER TABLE IF EXISTS ONLY rideshare.users_copy DROP CONSTRAINT IF EXISTS users_copy_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.trips DROP CONSTRAINT IF EXISTS trips_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.trip_requests DROP CONSTRAINT IF EXISTS trip_requests_pkey;
 ALTER TABLE IF EXISTS ONLY rideshare.trip_positions DROP CONSTRAINT IF EXISTS trip_positions_pkey;
@@ -51,6 +54,7 @@ DROP SEQUENCE IF EXISTS rideshare.vehicles_id_seq;
 DROP TABLE IF EXISTS rideshare.vehicles;
 DROP SEQUENCE IF EXISTS rideshare.vehicle_reservations_id_seq;
 DROP TABLE IF EXISTS rideshare.vehicle_reservations;
+DROP TABLE IF EXISTS rideshare.users_copy;
 DROP SEQUENCE IF EXISTS rideshare.users_id_seq;
 DROP SEQUENCE IF EXISTS rideshare.trips_id_seq;
 DROP SEQUENCE IF EXISTS rideshare.trip_requests_id_seq;
@@ -152,17 +156,28 @@ $$;
 
 CREATE FUNCTION rideshare.scrub_email(email_address character varying) RETURNS character varying
     LANGUAGE sql
-    AS $$
+    AS $$                      -- Returns: Anonymized email of same max length
+
 SELECT
-CONCAT(
-  SUBSTR(
-    MD5(RANDOM()::text),
-    0,
-    GREATEST(LENGTH(SPLIT_PART(email_address, '@', 1)) + 1, 6)
-  ),
-  '@',
-  SPLIT_PART(email_address, '@', 2)
-);
+    CONCAT(                                       -- Concatenates three parts to form new email:
+        -- PART 1: Generate randomized local-part
+        SUBSTR(
+            MD5(RANDOM()::text),                  -- 1a. Generate 32-char hex hash from random seed
+            0,                                    -- 1b. Start from beginning of hash
+            GREATEST(
+                LENGTH(
+                    SPLIT_PART(email_address, '@', 1)  -- 1c. Get length of original local-part
+                ) + 1,                                 -- 1d. Add 1 for safety
+                6                                      -- 1e. Minimum length of 6 chars
+            )
+        ),
+        
+        -- PART 2: Add separator
+        '@',                                     -- Standard email separator
+        
+        -- PART 3: Preserve domain
+        SPLIT_PART(email_address, '@', 2)        -- Extract everything after '@'
+    );
 $$;
 
 
@@ -231,6 +246,7 @@ CREATE TABLE rideshare.users (
     trips_count integer,
     drivers_license_number character varying(100)
 );
+ALTER TABLE ONLY rideshare.users ALTER COLUMN first_name SET STATISTICS 5000;
 
 
 --
@@ -238,6 +254,41 @@ CREATE TABLE rideshare.users (
 --
 
 COMMENT ON TABLE rideshare.users IS 'sensitive_fields|first_name:scrub_text,last_name:scrub_text,email:scrub_email';
+
+
+--
+-- Name: COLUMN users.first_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.first_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.last_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.last_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.email; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.email IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.password_digest; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.password_digest IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users.drivers_license_number; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users.drivers_license_number IS 'sensitive_data=true';
 
 
 --
@@ -415,6 +466,59 @@ CREATE SEQUENCE rideshare.users_id_seq
 --
 
 ALTER SEQUENCE rideshare.users_id_seq OWNED BY rideshare.users.id;
+
+
+--
+-- Name: users_copy; Type: TABLE; Schema: rideshare; Owner: -
+--
+
+CREATE TABLE rideshare.users_copy (
+    id bigint DEFAULT nextval('rideshare.users_id_seq'::regclass) NOT NULL,
+    first_name character varying NOT NULL,
+    last_name character varying NOT NULL,
+    email character varying NOT NULL,
+    type character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    password_digest character varying,
+    trips_count integer,
+    drivers_license_number character varying(100)
+);
+
+
+--
+-- Name: COLUMN users_copy.first_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users_copy.first_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users_copy.last_name; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users_copy.last_name IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users_copy.email; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users_copy.email IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users_copy.password_digest; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users_copy.password_digest IS 'sensitive_data=true';
+
+
+--
+-- Name: COLUMN users_copy.drivers_license_number; Type: COMMENT; Schema: rideshare; Owner: -
+--
+
+COMMENT ON COLUMN rideshare.users_copy.drivers_license_number IS 'sensitive_data=true';
 
 
 --
@@ -598,6 +702,14 @@ ALTER TABLE ONLY rideshare.trips
 
 
 --
+-- Name: users_copy users_copy_pkey; Type: CONSTRAINT; Schema: rideshare; Owner: -
+--
+
+ALTER TABLE ONLY rideshare.users_copy
+    ADD CONSTRAINT users_copy_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: rideshare; Owner: -
 --
 
@@ -706,6 +818,20 @@ CREATE UNIQUE INDEX index_vehicles_on_name ON rideshare.vehicles USING btree (na
 
 
 --
+-- Name: users_copy_email_idx; Type: INDEX; Schema: rideshare; Owner: -
+--
+
+CREATE UNIQUE INDEX users_copy_email_idx ON rideshare.users_copy USING btree (email);
+
+
+--
+-- Name: users_copy_last_name_idx; Type: INDEX; Schema: rideshare; Owner: -
+--
+
+CREATE INDEX users_copy_last_name_idx ON rideshare.users_copy USING btree (last_name);
+
+
+--
 -- Name: trip_requests fk_rails_3fdebbfaca; Type: FK CONSTRAINT; Schema: rideshare; Owner: -
 --
 
@@ -776,6 +902,8 @@ ALTER TABLE ONLY rideshare.trip_requests
 SET search_path TO rideshare;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20250218145845'),
+('20250204184725'),
 ('20231220043547'),
 ('20231218215836'),
 ('20231213045957'),
